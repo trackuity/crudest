@@ -77,7 +77,7 @@ class RestView(MethodView):
 
     def delete(self, **kwargs):
         self.resource.delete(**kwargs)
-        return None, 204
+        return '', 204
 
 
 class RestApi(object):
