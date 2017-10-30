@@ -28,7 +28,7 @@ class CatResource(CreateResource, RetrieveResource, UpdateResource, DeleteResour
     def retrieve(self, cat_id):
         # ...
 
-    def update(self, cat_id):
+    def update(self, cat_id, **kwargs):
         # ...
 
     def delete(self, cat_id):
@@ -37,7 +37,7 @@ class CatResource(CreateResource, RetrieveResource, UpdateResource, DeleteResour
 @api.resource('/cats/<int:cat_id>/actions/<int:action_id>', name='CatAction', schema=CatActionSchema)
 class CatActionResource(CreateResource):
 
-    def create(self, cat_id):
+    def create(self, cat_id, **kwargs):
         # ...
 ```
 
