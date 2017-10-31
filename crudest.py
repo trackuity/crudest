@@ -7,8 +7,7 @@ from apispec import APISpec
 from apispec.ext.marshmallow import swagger
 from flask import request, jsonify
 from flask.views import MethodView
-from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_optional, \
-    fresh_jwt_required, jwt_refresh_token_required
+from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_refresh_token_required
 from flask_swagger_ui import get_swaggerui_blueprint
 from webargs import fields
 from webargs.flaskparser import parser, use_kwargs
@@ -210,9 +209,18 @@ def extra_args(args):
 
 
 def jwt_required(func):
-    if getattr(func, '__auth_required__', None) is None:
-        func.__auth_required__ = True
+    func.__auth_required__ = True
     return flask_jwt_extended.jwt_required(func)
+
+
+def jwt_optional(func):
+    func.__auth_required__ = True
+    return flask_jwt_extended.jwt_optional(func)
+
+
+def fresh_jwt_required(func):
+    func.__auth_required__ = True
+    return flask_jwt_extended.fresh_jwt_required(func)
 
 
 def merge_recursive(values):
