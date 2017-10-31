@@ -5,7 +5,8 @@ setup(
     version = '0.1',
     license = 'Apache Software License (ASF)',
     packages = find_packages(),
-    install_requires = ['Flask', 'apispec', 'webargs', 'marshmallow', 'flask-swagger-ui'],
+    install_requires = ['Flask', 'apispec', 'webargs', 'marshmallow',
+                        'flask-swagger-ui', 'Flask-JWT-Extended'],
     test_suite = 'nose.collector',
     tests_require = ['nose']
 )
