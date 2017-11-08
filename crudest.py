@@ -7,7 +7,7 @@ from apispec import APISpec
 from apispec.ext.marshmallow import swagger
 from flask import request, jsonify
 from flask.views import MethodView
-from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_refresh_token_required
+from flask_jwt_extended import JWTManager, create_access_token, create_refresh_token, get_jwt_identity
 from flask_swagger_ui import get_swaggerui_blueprint
 from webargs import fields
 from webargs.flaskparser import parser, use_kwargs
@@ -24,6 +24,7 @@ __all__ = [
     'fields',
     'extra_args',
     'create_access_token',
+    'create_refresh_token',
     'get_jwt_identity',
     'jwt_required',
     'jwt_optional',
@@ -117,15 +118,18 @@ class RestApi(object):
         self.jwt = JWTManager(app)
 
         spec.options['securityDefinitions'] = {
-            'jwt_auth': {
+            'jwt_access_token': {
                 'type': 'apiKey',
                 'in': 'header',
-                'description': 'This is the closest approximation OpenAPI 2.0 has for JWT auth. '
+                'description': 'This is the closest approximation OpenAPI 2.0 has for JWT access token auth. '
+                               'Use a token prefixed with "Bearer " as header value in swagger-ui.'
+            },
+            'jwt_refresh_token': {
+                'type': 'apiKey',
+                'in': 'header',
+                'description': 'This is the closest approximation OpenAPI 2.0 has for JWT refresh token auth. '
                                'Use a token prefixed with "Bearer " as header value in swagger-ui.'
             }
-        }
-        spec.options['security'] = {
-            'jwt_auth': []
         }
 
         @app.route(spec_path)
@@ -145,37 +149,37 @@ class RestApi(object):
                 self.add_path(base_path, view, method='POST', tag=name,
                               input_schema=schema, output_schema=schema,
                               extra_args=getattr(cls.create, '__extra_args__', None),
-                              auth_required=getattr(cls.create, '__auth_required__', False),
+                              auth_required=getattr(cls.create, '__auth_required__', None),
                               status_code=201, description=cls.create.__doc__)
             if issubclass(cls, RetrieveResource):
                 self.add_path(base_path, view, method='GET', tag=name,
                               output_schema=schema(many=True),
                               extra_args=getattr(cls.list, '__extra_args__', None),
-                              auth_required=getattr(cls.list, '__auth_required__', False),
+                              auth_required=getattr(cls.list, '__auth_required__', None),
                               description=cls.list.__doc__)
                 self.add_path(path, view, method='GET', tag=name,
                               output_schema=schema,
                               extra_args=getattr(cls.retrieve, '__extra_args__', None),
-                              auth_required=getattr(cls.retrieve, '__auth_required__', False),
+                              auth_required=getattr(cls.retrieve, '__auth_required__', None),
                               description=cls.retrieve.__doc__)
             if issubclass(cls, UpdateResource):
                 self.add_path(path, view, method='PUT', tag=name,
                               input_schema=schema, output_schema=schema,
                               extra_args=getattr(cls.update, '__extra_args__', None),
-                              auth_required=getattr(cls.update, '__auth_required__', False),
+                              auth_required=getattr(cls.update, '__auth_required__', None),
                               description=cls.update.__doc__)
                 self.app.add_url_rule(path, view_func=view, methods=['PUT'])
             if issubclass(cls, DeleteResource):
                 self.add_path(path, view, method='DELETE', tag=name,
                               extra_args=getattr(cls.delete, '__extra_args__', None),
-                              auth_required=getattr(cls.delete, '__auth_required__', False),
+                              auth_required=getattr(cls.delete, '__auth_required__', None),
                               status_code=204, description=cls.delete.__doc__)
             return cls
 
         return decorator
 
     def add_path(self, path, view, method, tag,
-                 input_schema=None, output_schema=None, extra_args=None, auth_required=False,
+                 input_schema=None, output_schema=None, extra_args=None, auth_required=None,
                  status_code='default', description=''):
         swagger_path = self.RE_URL.sub(r'{\1}', path)
         self.app.add_url_rule(path, view_func=view, methods=[method])
@@ -192,7 +196,7 @@ class RestApi(object):
                     status_code: {'schema': output_schema} if output_schema else {}
                 },
                 'tags': [tag],
-                'security': [{'jwt_auth': []}] if auth_required else []
+                'security': [{auth_required: []}] if auth_required else []
             }
         })
 
@@ -209,18 +213,23 @@ def extra_args(args):
 
 
 def jwt_required(func):
-    func.__auth_required__ = True
+    func.__auth_required__ = 'jwt_access_token'
     return flask_jwt_extended.jwt_required(func)
 
 
 def jwt_optional(func):
-    func.__auth_required__ = True
+    func.__auth_required__ = 'jwt_access_token'
     return flask_jwt_extended.jwt_optional(func)
 
 
 def fresh_jwt_required(func):
-    func.__auth_required__ = True
+    func.__auth_required__ = 'jwt_access_token'
     return flask_jwt_extended.fresh_jwt_required(func)
+
+
+def jwt_refresh_token_required(func):
+    func.__auth_required__ = 'jwt_refresh_token'
+    return flask_jwt_extended.jwt_refresh_token_required(func)
 
 
 def merge_recursive(values):
