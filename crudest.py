@@ -46,25 +46,25 @@ class CreateResource(Resource):
 class RetrieveResource(Resource):
 
     @abstractmethod
-    def list(self, *args):
+    def list(self, *args, **kwargs):
         raise NotImplementedError()
 
     @abstractmethod
-    def retrieve(self, *args):
+    def retrieve(self, *args, **kwargs):
         raise NotImplementedError()
 
 
 class UpdateResource(Resource):
 
     @abstractmethod
-    def update(self, resource_id):
+    def update(self, *args, **kwargs):
         raise NotImplementedError()
 
 
 class DeleteResource(Resource):
 
     @abstractmethod
-    def delete(self, resource_id):
+    def delete(self, *args, **kwargs):
         raise NotImplementedError()
 
 
