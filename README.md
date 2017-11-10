@@ -12,8 +12,10 @@ from crudest import RestApi, CreateResource, RetrieveResource, UpdateResource, D
 from models import Cat  # e.g. ndb models
 from schemas import SessionSchema, CatSchema, CatActionSchema  # marshmallow schemas
 
+
 app = Flask(__name__)
 api = RestApi(app, title='Cat API', version='v1')
+
 
 @api.resource('/sessions/<int:session_id>', name='Session', schema=SessionSchema)
 class SessionResource(CreateResource):
@@ -22,6 +24,7 @@ class SessionResource(CreateResource):
     def create(self, username, password):
         # check username and password here
         return {'access_token': create_access_token(identity=username)}
+
 
 @api.resource('/cats/<int:cat_id>', name='Cat', schema=CatSchema)
 class CatResource(CreateResource, RetrieveResource, UpdateResource, DeleteResource):
@@ -47,6 +50,7 @@ class CatResource(CreateResource, RetrieveResource, UpdateResource, DeleteResour
     @jwt_required
     def delete(self, cat_id):
         # ...
+
 
 @api.resource('/cats/<int:cat_id>/actions/<int:action_id>', name='CatAction', schema=CatActionSchema)
 class CatActionResource(CreateResource):
