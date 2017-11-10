@@ -120,12 +120,14 @@ class RestApi(object):
         spec.options['securityDefinitions'] = {
             'jwt_access_token': {
                 'type': 'apiKey',
+                'name': 'Authorization',
                 'in': 'header',
                 'description': 'This is the closest approximation OpenAPI 2.0 has for JWT access token auth. '
                                'Use a token prefixed with "Bearer " as header value in swagger-ui.'
             },
             'jwt_refresh_token': {
                 'type': 'apiKey',
+                'name': 'Authorization',
                 'in': 'header',
                 'description': 'This is the closest approximation OpenAPI 2.0 has for JWT refresh token auth. '
                                'Use a token prefixed with "Bearer " as header value in swagger-ui.'
