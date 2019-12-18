@@ -8,7 +8,9 @@ from apispec.ext.marshmallow import swagger
 from flask import request, jsonify
 from apispec.ext.marshmallow import MarshmallowPlugin
 from flask.views import MethodView
-from flask_jwt_extended import JWTManager, create_access_token, create_refresh_token, get_jwt_identity
+from flask_jwt_extended import (JWTManager, create_access_token,
+                                create_refresh_token, get_jti, get_jwt_claims,
+                                get_jwt_identity)
 from flask_swagger_ui import get_swaggerui_blueprint
 from webargs import fields
 from webargs.flaskparser import parser, use_kwargs
@@ -27,6 +29,8 @@ __all__ = [
     'create_access_token',
     'create_refresh_token',
     'get_jwt_identity',
+    'get_jwt_claims',
+    'get_jti',
     'jwt_required',
     'jwt_optional',
     'fresh_jwt_required',
@@ -122,6 +126,8 @@ class RestApi:
         self.openapi = marshmallow_plugin.converter  # openapi converter from marshmallow plugin
 
         self.jwt = JWTManager(app)
+        self.token_in_blacklist_checker = self.jwt.token_in_blacklist_loader  # shortcut to blacklisting decorator
+        self.token_claims_loader = self.jwt.user_claims_loader  # shortcut to user claims decorator
 
         spec.components.security_scheme('jwt_access_token', {
             'type': 'http',
