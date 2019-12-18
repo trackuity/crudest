@@ -1,12 +1,12 @@
-import flask_jwt_extended
 import functools
 import re
-
 from abc import ABCMeta, abstractmethod
+
+import flask_jwt_extended
 from apispec import APISpec
-from apispec.ext.marshmallow import swagger
-from flask import request, jsonify
 from apispec.ext.marshmallow import MarshmallowPlugin
+from flask import jsonify, request
+from flask.helpers import make_response, url_for
 from flask.views import MethodView
 from flask_jwt_extended import (JWTManager, create_access_token,
                                 create_refresh_token, get_jti, get_jwt_claims,
@@ -14,7 +14,6 @@ from flask_jwt_extended import (JWTManager, create_access_token,
 from flask_swagger_ui import get_swaggerui_blueprint
 from webargs import fields
 from webargs.flaskparser import parser, use_kwargs
-
 
 __all__ = [
     'Resource',
@@ -78,7 +77,82 @@ class CrudResource(CreateResource, RetrieveResource, UpdateResource, DeleteResou
     pass
 
 
+class Response:
+    """
+    Response objects can be used to pass metadata in your API responses. In 
+    particular, they allow the passing of relevant link relations. Some of these
+    links get added automatically, but you can also add more yourself. The link
+    names should be taken from the standard IANA Link Relation Registry:
+    
+    https://www.iana.org/assignments/link-relations/link-relations.xhtml
+    """
+
+    def __init__(self, data, links=None):
+        self._data = data
+        self._links = links if links is not None else {}
+
+    def dump_data(self, schema_cls, many=False):
+        return schema_cls(many=many).dump(self._data)
+    
+    def extend_links(self, base_links):
+        if base_links is None:
+            return self._links
+        else:
+            return {**base_links, **self._links}
+
+    def generate(self, schema_cls, many, base_links=None):
+        """
+        The base implementation simply generates JSON, ignoring the links.
+        """
+        return jsonify(self.dump_data(schema_cls, many=many))
+
+
+class HeadedResponse(Response):
+    """
+    Adds the links metadata to the response via the HTTP Link header and allows
+    any other given headers to be added as well.
+    """
+
+    def __init__(self, data, links=None, headers=None):
+        super().__init__(data, links)
+        self._headers = headers
+
+    def generate(self, schema_cls, many, base_links=None):
+        response = make_response(super().generate(schema_cls, many=many))
+        response.headers['Link'] = ', '.join(
+            f'<{u}>; rel="{n}"'
+            for (n, u) in self.extend_links(base_links).items()
+        )
+        if self._headers is not None:
+            for key, value in self._headers.items():
+                response.headers[key] = value
+        return response
+
+
+class WrappedResponse(Response):
+    """
+    Wraps the actual response content under a top-level 'data' member in the
+    generated JSON, so that other metadata can be added to the response under
+    different top-level members.
+    """
+
+    def __init__(self, data, links=None, **kwargs):
+        super().__init__(data, links)
+        self._kwargs = kwargs
+    
+    def generate(self, schema_cls, many, base_links=None):
+        return jsonify(
+            data=self.dump_data(schema_cls, many=many),
+            links=self.extend_links(base_links),
+            **self._kwargs
+        )
+
+
 class RestView(MethodView):
+
+    @staticmethod
+    def _extract_parent_ids(resource, kwargs):
+        return {p: kwargs[p] for p in resource.id_params[:-1]}
 
     def __init__(self, schema_cls, resource, num_ids=1):
         super().__init__()
@@ -87,22 +161,50 @@ class RestView(MethodView):
         self.num_ids = num_ids
 
     def post(self, **kwargs):
-        kwargs.update(parser.parse(self.schema_cls(strict=True), request))
-        result = self.resource.create(**kwargs)
-        return jsonify(self.schema_cls().dump(result).data), 201
+        parent_ids = self._extract_parent_ids(self.resource, kwargs)
+        kwargs.update(parser.parse(self.schema_cls(), request))
+        response = self.resource.create(**kwargs)
+        if not isinstance(response, Response):
+            response = Response(data=response)
+        return response.generate(self.schema_cls, many=False, base_links={
+            'collection': url_for(self.resource.name, _external=True, **parent_ids)
+        }), 201
 
     def get(self, **kwargs):
+        parent_ids = self._extract_parent_ids(self.resource, kwargs)
         if len(kwargs) < self.num_ids:
-            result = self.resource.list(**kwargs)
-            return jsonify(self.schema_cls(many=True).dump(result).data)
+            response = self.resource.list(**kwargs)
+            if not isinstance(response, Response):
+                response = Response(data=response)
+            return response.generate(self.schema_cls, many=True, base_links={
+                'self': url_for(self.resource.name, _external=True, **parent_ids)
+            })
         else:
-            result = self.resource.retrieve(**kwargs)
-            return jsonify(self.schema_cls().dump(result).data)
+            response = self.resource.retrieve(**kwargs)
+            if not isinstance(response, Response):
+                response = Response(data=response)
+            return response.generate(self.schema_cls, many=False, base_links={
+                'self': url_for(
+                    self.resource.name,
+                    _external=True,
+                    **{**parent_ids, **kwargs}
+                ),
+                'collection': url_for(
+                    self.resource.name,
+                    _external=True,
+                    **parent_ids
+                )
+            })
 
     def put(self, **kwargs):
-        kwargs.update(parser.parse(self.schema_cls(), request))
-        result = self.resource.update(**kwargs)
-        return jsonify(self.schema_cls().dump(result).data)
+        parent_ids = self._extract_parent_ids(self.resource, kwargs)
+        kwargs.update(parser.parse(self.schema_cls(partial=True), request))
+        response = self.resource.update(**kwargs)
+        if not isinstance(response, Response):
+            response = Response(data=response)
+        return response.generate(self.schema_cls, many=False, base_links={
+            'collection': url_for(self.resource.name, _external=True, **parent_ids)
+        })
 
     def delete(self, **kwargs):
         self.resource.delete(**kwargs)
@@ -151,8 +253,10 @@ class RestApi:
         self.spec.components.schema(name, schema=schema)
 
         def decorator(cls):
+            cls.name = name
+            cls.id_params = self.RE_URL.findall(path)
             base_path = '/'.join(path.split('/')[:-1])
-            view = RestView.as_view(cls.__name__.lower(), schema, cls(), len(path[1:].split('/')) / 2)
+            view = RestView.as_view(name, schema, cls(), len(cls.id_params))
             if issubclass(cls, CreateResource):
                 self.add_path(base_path, view, method='POST', tag=name,
                               input_schema=schema, output_schema=schema,
@@ -207,6 +311,9 @@ class RestApi:
                 'security': [{auth_required: []}] if auth_required else []
             }
         })
+
+    def url_for(self, resource_name, _method='GET', _external=True, **kwargs):
+        return url_for(resource_name, _method=_method, _external=_external, **kwargs)
 
 
 def extra_args(args):
