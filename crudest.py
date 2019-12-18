@@ -33,8 +33,8 @@ __all__ = [
 ]
 
 
-class Resource(object):
-    __metaclass__ = ABCMeta
+class Resource(metaclass=ABCMeta):
+    pass
 
 
 class CreateResource(Resource):
@@ -76,7 +76,7 @@ class CrudResource(CreateResource, RetrieveResource, UpdateResource, DeleteResou
 class RestView(MethodView):
 
     def __init__(self, schema_cls, resource, num_ids=1):
-        super(MethodView, self).__init__()
+        super().__init__()
         self.schema_cls = schema_cls
         self.resource = resource
         self.num_ids = num_ids
@@ -104,7 +104,7 @@ class RestView(MethodView):
         return '', 204
 
 
-class RestApi(object):
+class RestApi:
 
     RE_URL = re.compile(r'<(?:[^:<>]+:)?([^<>]+)>')
 
