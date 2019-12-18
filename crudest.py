@@ -6,6 +6,7 @@ from abc import ABCMeta, abstractmethod
 from apispec import APISpec
 from apispec.ext.marshmallow import swagger
 from flask import request, jsonify
+from apispec.ext.marshmallow import MarshmallowPlugin
 from flask.views import MethodView
 from flask_jwt_extended import JWTManager, create_access_token, create_refresh_token, get_jwt_identity
 from flask_swagger_ui import get_swaggerui_blueprint
@@ -110,29 +111,28 @@ class RestApi:
 
     def __init__(self, app, title, version='v1', spec_path='/spec', docs_path='/docs'):
         self.app = app
+
+        marshmallow_plugin = MarshmallowPlugin()
         self.spec = spec = APISpec(
             title=title,
             version=version,
-            plugins=['apispec.ext.marshmallow'],
+            openapi_version="3.0.2",
+            plugins=[marshmallow_plugin],
         )
+        self.openapi = marshmallow_plugin.converter  # openapi converter from marshmallow plugin
+
         self.jwt = JWTManager(app)
 
-        spec.options['securityDefinitions'] = {
-            'jwt_access_token': {
-                'type': 'apiKey',
-                'name': 'Authorization',
-                'in': 'header',
-                'description': 'This is the closest approximation OpenAPI 2.0 has for JWT access token auth. '
-                               'Use a token prefixed with "Bearer " as header value in swagger-ui.'
-            },
-            'jwt_refresh_token': {
-                'type': 'apiKey',
-                'name': 'Authorization',
-                'in': 'header',
-                'description': 'This is the closest approximation OpenAPI 2.0 has for JWT refresh token auth. '
-                               'Use a token prefixed with "Bearer " as header value in swagger-ui.'
-            }
-        }
+        spec.components.security_scheme('jwt_access_token', {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT'
+        })
+        spec.components.security_scheme('jwt_refresh_token', {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT'
+        })
 
         @app.route(spec_path)
         def get_spec():
@@ -142,7 +142,7 @@ class RestApi:
         app.register_blueprint(swaggerui_blueprint, url_prefix=docs_path)
 
     def resource(self, path, name, schema):
-        self.spec.definition(name, schema=schema)
+        self.spec.components.schema(name, schema=schema)
 
         def decorator(cls):
             base_path = '/'.join(path.split('/')[:-1])
@@ -187,13 +187,13 @@ class RestApi:
         self.app.add_url_rule(path, view_func=view, methods=[method])
         parameters = []
         if input_schema:
-            parameters.extend(swagger.schema2parameters(input_schema))
+            parameters.extend(self.openapi.schema2parameters(input_schema, default_in='body'))
         if extra_args:
-            parameters.extend(swagger.fields2parameters(extra_args))
-        self.spec.add_path(swagger_path, {
+            parameters.extend(self.openapi.fields2parameters(extra_args, default_in='body'))
+        self.spec.path(swagger_path, operations={
             method.lower(): {
                 'description': description,
-                'parameters': [merge_recursive(parameters)],
+                'parameters': [merge_recursive(parameters)] if parameters else [],
                 'responses': {
                     status_code: {'schema': output_schema} if output_schema else {}
                 },
