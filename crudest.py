@@ -220,6 +220,7 @@ class RestApi:
 
     def __init__(self, app, title, version='v1', spec_path='/spec', docs_path='/docs'):
         self.app = app
+        self.resource_methods = {}
 
         marshmallow_plugin = MarshmallowPlugin()
         self.spec = spec = APISpec(
@@ -258,6 +259,7 @@ class RestApi:
         def decorator(cls):
             cls.name = name
             cls.id_params = self.RE_URL.findall(path)
+
             base_path = '/'.join(path.split('/')[:-1])
             view = RestView.as_view(name, schema, cls(), len(cls.id_params))
             if issubclass(cls, CreateResource):
@@ -289,6 +291,12 @@ class RestApi:
                               extra_args=getattr(cls.delete, '__extra_args__', None),
                               auth_required=getattr(cls.delete, '__auth_required__', None),
                               status_code=204, description=cls.delete.__doc__)
+
+            # keep track of methods
+            self.resource_methods[name] = next(
+                r.methods for r in self.app.url_map.iter_rules() if r.endpoint == name
+            )
+                            
             return cls
 
         return decorator
@@ -315,7 +323,13 @@ class RestApi:
             }
         })
 
-    def url_for(self, resource_name, _method='GET', _external=True, **kwargs):
+    def url_for(self, resource_name, _method=None, _external=True, **kwargs):
+        if _method is None:
+            methods = self.resource_methods[resource_name]
+            for desired_method in ('GET', 'PUT', 'DELETE', 'POST'):
+                if desired_method in methods:
+                    _method = desired_method
+                    break
         return url_for(resource_name, _method=_method, _external=_external, **kwargs)
 
 
