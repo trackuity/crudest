@@ -1,12 +1,12 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name = 'crudest',
-    version = '0.2',
+    version = '0.3',
+    description = 'CRUD-structured REST APIs in Python, using Flask, marshmallow, webargs and apispec',
     license = 'Apache Software License (ASF)',
-    packages = find_packages(),
+    url = 'https://github.com/trackuity/crudest',
+    py_modules = ['crudest'],
     install_requires = ['Flask', 'apispec>3.0', 'webargs', 'marshmallow>3.0',
-                        'flask-swagger-ui>3.0', 'Flask-JWT-Extended'],
-    test_suite = 'nose.collector',
-    tests_require = ['nose']
+                        'flask-swagger-ui>3.0', 'Flask-JWT-Extended']
 )
