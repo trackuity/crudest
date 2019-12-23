@@ -51,14 +51,17 @@ class CreateResource(Resource):
         raise NotImplementedError()
 
 
-class RetrieveResource(Resource):
-
-    @abstractmethod
-    def list(self, *args, **kwargs):
-        raise NotImplementedError()
+class NonListableRetrieveResource(Resource):
 
     @abstractmethod
     def retrieve(self, *args, **kwargs):
+        raise NotImplementedError()
+
+
+class RetrieveResource(NonListableRetrieveResource):
+
+    @abstractmethod
+    def list(self, *args, **kwargs):
         raise NotImplementedError()
 
 
