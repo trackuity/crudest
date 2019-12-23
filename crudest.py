@@ -18,6 +18,7 @@ from webargs.flaskparser import parser, use_kwargs
 __all__ = [
     'Resource',
     'CreateResource',
+    'NonListableRetrieveResource',
     'RetrieveResource',
     'UpdateResource',
     'DeleteResource',
@@ -277,6 +278,7 @@ class RestApi:
                               extra_args=getattr(cls.list, '__extra_args__', None),
                               auth_required=getattr(cls.list, '__auth_required__', None),
                               description=cls.list.__doc__)
+            if issubclass(cls, NonListableRetrieveResource):
                 self.add_path(path, view, method='GET', tag=name,
                               output_schema=schema,
                               extra_args=getattr(cls.retrieve, '__extra_args__', None),

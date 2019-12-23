@@ -1,10 +1,12 @@
+import random
+import string
 from typing import collections
 
 from flask.app import Flask
 from flask.json import jsonify
 from marshmallow import Schema, fields
 
-from crudest import (CreateResource, CrudResource, DeleteResource, HeadedResponse, RestApi,
+from crudest import (CreateResource, CrudResource, DeleteResource, HeadedResponse, NonListableRetrieveResource, RestApi,
                      RetrieveResource, UpdateResource, WrappedResponse, extra_args, jwt_required)
 
 app = Flask(__name__)
@@ -54,6 +56,11 @@ class CatWhiskerSchema(IdSchema):
 
 class CatActionSchema(IdSchema):
     verb = fields.Str()
+
+
+class CatSyncSchema(Schema):
+    id = fields.Str()  # str, not int
+    done = fields.Bool()
 
 
 @api.resource('/cats/<int:cat_id>', name='Cat', schema=CatSchema)
@@ -182,3 +189,25 @@ class CatActionResource(CreateResource, UpdateResource):
                 self=api.url_for('CatAction', cat_id=cat_id, cat_action_id=1)
             )
         )
+
+
+@api.resource('/cats/<int:cat_id>/syncs/<cat_sync_id>', name='CatSync', schema=CatSyncSchema)
+class CatSyncResource(CreateResource, NonListableRetrieveResource):
+
+    @jwt_required
+    def create(self, cat_id):
+        if cat_id not in db['Cat']:
+            raise InvalidUsage('Cat not found.', status_code=404)
+        cat_sync_id = ''.join([random.choice(string.ascii_letters + string.digits) for n in range(32)])
+        cat_sync = {'id': cat_sync_id, 'done': False}
+        db['CatSync'][cat_sync_id] = cat_sync
+        return cat_sync
+
+    @jwt_required
+    def retrieve(self, cat_id, cat_sync_id):
+        if cat_id not in db['Cat']:
+            raise InvalidUsage('Cat not found.', status_code=404)
+        cat_sync = db['CatSync'].get(cat_sync_id)
+        if cat_sync is None:
+            raise InvalidUsage('Cat sync not found.', status_code=404)
+        return cat_sync

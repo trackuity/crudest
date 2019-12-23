@@ -39,6 +39,7 @@ def database():
     db['CatWhisker'][2] = {'id': 2, 'cat_id': 1, 'length': Decimal('11.03')}
     db['CatWhisker'][3] = {'id': 3, 'cat_id': 1, 'length': Decimal('9.95')}
     db['CatWhisker'][4] = {'id': 4, 'cat_id': 1, 'length': Decimal('10.34')}
+    db['CatSync']['URQpbCZ28urcWnEEeCOh3JAbol0XlAax'] = {'id': 'URQpbCZ28urcWnEEeCOh3JAbol0XlAax', 'done': True}
     return db
 
 
@@ -87,6 +88,17 @@ def test_create_cat_action(client, access_token, database):
 
     assert rv.status_code == 201
     assert rv.json()['links']['collection'] == 'http://feline.io/cats/1/actions'
+
+
+def test_create_cat_sync(client, access_token, database):
+    cat_id = 1
+
+    rv = client.post(f'http://feline.io/cats/{cat_id}/syncs', headers={
+        'Authorization': 'Bearer ' + access_token
+    })
+
+    assert rv.status_code == 201
+    assert not rv.json()['done']
 
 
 def test_list_cats(client, access_token, database):
@@ -170,6 +182,20 @@ def test_retrieve_cat_whisker(client, access_token, database):
     stored = database['CatWhisker'][1]
     for key in stored.keys():
         assert str(result[key]) == str(stored[key])  # to str because decimals
+
+
+def test_retrieve_cat_sync(client, access_token, database):
+    cat_sync_id = 'URQpbCZ28urcWnEEeCOh3JAbol0XlAax'
+
+    rv = client.get(f'http://feline.io/cats/1/syncs/{cat_sync_id}', headers={
+        'Authorization': 'Bearer ' + access_token
+    })
+    result = rv.json()
+
+    assert rv.status_code == 200
+    stored = database['CatSync'][cat_sync_id]
+    for key in stored.keys():
+        assert result[key] == stored[key]
 
 
 def test_update_cat(client, access_token, database):
