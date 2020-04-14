@@ -34,6 +34,7 @@ __all__ = [
     'get_jwt_identity',
     'get_jwt_claims',
     'get_jti',
+    'basic_auth_required',
     'jwt_required',
     'jwt_optional',
     'fresh_jwt_required',
@@ -239,6 +240,10 @@ class RestApi:
         self.token_in_blacklist_checker = self.jwt.token_in_blacklist_loader  # shortcut to blacklisting decorator
         self.token_claims_loader = self.jwt.user_claims_loader  # shortcut to user claims decorator
 
+        spec.components.security_scheme('basic_http', {
+            'type': 'http',
+            'scheme': 'basic'
+        })
         spec.components.security_scheme('jwt_access_token', {
             'type': 'http',
             'scheme': 'bearer',
@@ -267,32 +272,37 @@ class RestApi:
             base_path = '/'.join(path.split('/')[:-1])
             view = RestView.as_view(name, schema, cls(), len(cls.id_params))
             if issubclass(cls, CreateResource):
-                self.add_path(base_path, view, method='POST', tag=name,
+                self.add_path(base_path, view, method='POST',
+                              tag=name, id_params=cls.id_params[:-1],
                               input_schema=schema, output_schema=schema,
                               extra_args=getattr(cls.create, '__extra_args__', None),
                               auth_required=getattr(cls.create, '__auth_required__', None),
                               status_code=201, description=cls.create.__doc__)
             if issubclass(cls, RetrieveResource):
-                self.add_path(base_path, view, method='GET', tag=name,
+                self.add_path(base_path, view, method='GET',
+                              tag=name, id_params=cls.id_params[:-1],
                               output_schema=schema(many=True),
                               extra_args=getattr(cls.list, '__extra_args__', None),
                               auth_required=getattr(cls.list, '__auth_required__', None),
                               description=cls.list.__doc__)
             if issubclass(cls, NonListableRetrieveResource):
-                self.add_path(path, view, method='GET', tag=name,
+                self.add_path(path, view, method='GET',
+                              tag=name, id_params=cls.id_params,
                               output_schema=schema,
                               extra_args=getattr(cls.retrieve, '__extra_args__', None),
                               auth_required=getattr(cls.retrieve, '__auth_required__', None),
                               description=cls.retrieve.__doc__)
             if issubclass(cls, UpdateResource):
-                self.add_path(path, view, method='PUT', tag=name,
+                self.add_path(path, view, method='PUT',
+                              tag=name, id_params=cls.id_params,
                               input_schema=schema, output_schema=schema,
                               extra_args=getattr(cls.update, '__extra_args__', None),
                               auth_required=getattr(cls.update, '__auth_required__', None),
                               description=cls.update.__doc__)
                 self.app.add_url_rule(path, view_func=view, methods=['PUT'])
             if issubclass(cls, DeleteResource):
-                self.add_path(path, view, method='DELETE', tag=name,
+                self.add_path(path, view, method='DELETE',
+                              tag=name, id_params=cls.id_params,
                               extra_args=getattr(cls.delete, '__extra_args__', None),
                               auth_required=getattr(cls.delete, '__auth_required__', None),
                               status_code=204, description=cls.delete.__doc__)
@@ -306,25 +316,36 @@ class RestApi:
 
         return decorator
 
-    def add_path(self, path, view, method, tag,
+    def add_path(self, path, view, method, tag, id_params=None,
                  input_schema=None, output_schema=None, extra_args=None, auth_required=None,
                  status_code='default', description=''):
         swagger_path = self.RE_URL.sub(r'{\1}', path)
         self.app.add_url_rule(path, view_func=view, methods=[method])
-        parameters = []
-        if input_schema:
-            parameters.extend(self.openapi.schema2parameters(input_schema, default_in='body'))
+
+        parameters = [{'name': id_param, 'in': 'path'} for id_param in id_params]
         if extra_args:
-            parameters.extend(self.openapi.fields2parameters(extra_args, default_in='body'))
+            parameters.extend(self.openapi.fields2parameters(extra_args, default_in='query'))
+
+        request_body = {}
+        if input_schema:
+            request_body['requestBody'] = {
+                'content': {
+                    'application/json': {
+                        'schema': self.openapi.schema2jsonschema(input_schema)
+                    }
+                }
+            }
+
         self.spec.path(swagger_path, operations={
             method.lower(): {
                 'description': description,
-                'parameters': [merge_recursive(parameters)] if parameters else [],
+                'parameters': parameters,
                 'responses': {
                     status_code: {'schema': output_schema} if output_schema else {}
                 },
                 'tags': [tag],
-                'security': [{auth_required: []}] if auth_required else []
+                'security': [{auth_required: []}] if auth_required else [],
+                **request_body
             }
         })
 
@@ -349,6 +370,11 @@ def extra_args(args):
     return decorator
 
 
+def basic_auth_required(func):
+    func.__auth_required__ = 'basic_http'
+    return func
+
+
 def jwt_required(func):
     func.__auth_required__ = 'jwt_access_token'
     return flask_jwt_extended.jwt_required(func)
@@ -367,19 +393,3 @@ def fresh_jwt_required(func):
 def jwt_refresh_token_required(func):
     func.__auth_required__ = 'jwt_refresh_token'
     return flask_jwt_extended.jwt_refresh_token_required(func)
-
-
-def merge_recursive(values):
-    return functools.reduce(_merge_recursive, values, {})
-
-
-def _merge_recursive(child, parent):
-    if isinstance(child, dict) or isinstance(parent, dict):
-        child = child or {}
-        parent = parent or {}
-        keys = set(child.keys()).union(parent.keys())
-        return {
-            key: _merge_recursive(child.get(key), parent.get(key))
-            for key in keys
-        }
-    return child if child is not None else parent
