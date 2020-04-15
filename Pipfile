@@ -10,6 +10,7 @@ requests-flask-adapter = "*"
 
 [packages]
 crudest = {editable = true,path = "."}
+webargs = "==6"
 
 [requires]
 python_version = "3.7"

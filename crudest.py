@@ -170,7 +170,11 @@ class RestView(MethodView):
 
     def post(self, **kwargs):
         parent_ids = self._extract_parent_ids(self.resource, kwargs)
-        kwargs.update(parser.parse(self.schema_cls(), request))
+        kwargs.update(parser.parse(
+            self.schema_cls(),
+            request,
+            location='json_or_form'
+        ))
         response = self.resource.create(**kwargs)
         if not isinstance(response, Response):
             response = Response(data=response)
@@ -206,7 +210,11 @@ class RestView(MethodView):
 
     def put(self, **kwargs):
         parent_ids = self._extract_parent_ids(self.resource, kwargs)
-        kwargs.update(parser.parse(self.schema_cls(partial=True), request))
+        kwargs.update(parser.parse(
+            self.schema_cls(partial=True),
+            request,
+            location='json_or_form'
+        ))
         response = self.resource.update(**kwargs)
         if not isinstance(response, Response):
             response = Response(data=response)
@@ -365,7 +373,7 @@ def extra_args(args):
         if getattr(func, '__extra_args__', None) is None:
             func.__extra_args__ = {}
         func.__extra_args__.update(args)
-        return use_kwargs(args)(func)
+        return use_kwargs(args, location='query')(func)
 
     return decorator
 
