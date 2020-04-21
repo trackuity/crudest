@@ -326,7 +326,7 @@ class RestApi:
 
     def add_path(self, path, view, method, tag, id_params=None,
                  input_schema=None, output_schema=None, extra_args=None, auth_required=None,
-                 status_code='default', description=''):
+                 status_code=200, description=''):
         swagger_path = self.RE_URL.sub(r'{\1}', path)
         self.app.add_url_rule(path, view_func=view, methods=[method])
 
@@ -349,7 +349,13 @@ class RestApi:
                 'description': description,
                 'parameters': parameters,
                 'responses': {
-                    status_code: {'schema': output_schema} if output_schema else {}
+                    str(status_code): {} if not output_schema else {
+                        'content': {
+                            'application/json': {
+                                'schema': output_schema
+                            }
+                        }
+                    }
                 },
                 'tags': [tag],
                 'security': [{auth_required: []}] if auth_required else [],
