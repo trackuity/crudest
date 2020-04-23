@@ -116,6 +116,9 @@ def test_list_cats(client, access_token, database):
     for key in stored.keys():
         assert str(first_result[key]) == str(stored[key])  # to str because decimals
 
+    assert 'access-control-expose-headers' in rv.headers
+    assert 'link' in rv.headers['access-control-expose-headers'].lower()
+    
     assert 'link' in rv.headers
     assert rv.links['self']['url'] == 'http://feline.io/cats'
     assert rv.links['next']['url'] == 'http://feline.io/cats?page=2'

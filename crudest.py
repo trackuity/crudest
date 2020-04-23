@@ -127,10 +127,13 @@ class HeadedResponse(Response):
 
     def generate(self, schema_cls, many, base_links=None):
         response = make_response(super().generate(schema_cls, many=many))
-        response.headers['Link'] = ', '.join(
+        link_header = ', '.join(
             f'<{u}>; rel="{n}"'
             for (n, u) in self.extend_links(base_links).items()
         )
+        if link_header:
+            response.headers['Link'] = link_header
+            response.headers['Access-Control-Expose-Headers'] = 'Link'
         if self._headers is not None:
             for key, value in self._headers.items():
                 response.headers[key] = value
