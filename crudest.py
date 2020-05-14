@@ -95,8 +95,9 @@ class Response:
     https://www.iana.org/assignments/link-relations/link-relations.xhtml
     """
 
-    def __init__(self, data, links=None):
+    def __init__(self, data, status_code=None, links=None):
         self._data = data
+        self._status_code = status_code
         self._links = links if links is not None else {}
 
     def dump_data(self, schema_cls, many=False):
@@ -114,6 +115,9 @@ class Response:
         """
         return jsonify(self.dump_data(schema_cls, many=many))
 
+    def get_status_code(self, default=None):
+        return self._status_code or default
+
 
 class HeadedResponse(Response):
     """
@@ -121,8 +125,8 @@ class HeadedResponse(Response):
     any other given headers to be added as well.
     """
 
-    def __init__(self, data, links=None, headers=None):
-        super().__init__(data, links)
+    def __init__(self, data, status_code=None, links=None, headers=None):
+        super().__init__(data, status_code, links)
         self._headers = headers
 
     def generate(self, schema_cls, many, base_links=None):
@@ -147,8 +151,8 @@ class WrappedResponse(Response):
     different top-level members.
     """
 
-    def __init__(self, data, links=None, **kwargs):
-        super().__init__(data, links)
+    def __init__(self, data, status_code=None, links=None, **kwargs):
+        super().__init__(data, status_code, links)
         self._kwargs = kwargs
     
     def generate(self, schema_cls, many, base_links=None):
@@ -183,7 +187,7 @@ class RestView(MethodView):
             response = Response(data=response)
         return response.generate(self.schema_cls, many=False, base_links={
             'collection': url_for(self.resource.name, _external=True, **parent_ids)
-        }), 201
+        }), response.get_status_code(default=201)
 
     def get(self, **kwargs):
         parent_ids = self._extract_parent_ids(self.resource, kwargs)
@@ -193,7 +197,7 @@ class RestView(MethodView):
                 response = Response(data=response)
             return response.generate(self.schema_cls, many=True, base_links={
                 'self': url_for(self.resource.name, _external=True, **parent_ids)
-            })
+            }), response.get_status_code(default=200)
         else:
             response = self.resource.retrieve(**kwargs)
             if not isinstance(response, Response):
@@ -209,7 +213,7 @@ class RestView(MethodView):
                     _external=True,
                     **parent_ids
                 )
-            })
+            }), response.get_status_code(default=200)
 
     def put(self, **kwargs):
         parent_ids = self._extract_parent_ids(self.resource, kwargs)
@@ -223,7 +227,7 @@ class RestView(MethodView):
             response = Response(data=response)
         return response.generate(self.schema_cls, many=False, base_links={
             'collection': url_for(self.resource.name, _external=True, **parent_ids)
-        })
+        }), response.get_status_code(default=200)
 
     def delete(self, **kwargs):
         self.resource.delete(**kwargs)
