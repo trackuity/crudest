@@ -281,55 +281,58 @@ class RestApi:
         self.spec.components.schema(name, schema=schema)
 
         def decorator(cls):
-            cls.name = name
-            cls.id_params = self.RE_URL.findall(path)
-
-            base_path = '/'.join(path.split('/')[:-1])
-            view = RestView.as_view(name, schema, cls(), len(cls.id_params))
-            if issubclass(cls, CreateResource):
-                self.add_path(base_path, view, method='POST',
-                              tag=name, id_params=cls.id_params[:-1],
-                              input_schema=schema, output_schema=schema,
-                              extra_args=getattr(cls.create, '__extra_args__', None),
-                              auth_required=getattr(cls.create, '__auth_required__', None),
-                              status_code=201, description=cls.create.__doc__)
-            if issubclass(cls, RetrieveResource):
-                self.add_path(base_path, view, method='GET',
-                              tag=name, id_params=cls.id_params[:-1],
-                              output_schema=schema(many=True),
-                              extra_args=getattr(cls.list, '__extra_args__', None),
-                              auth_required=getattr(cls.list, '__auth_required__', None),
-                              description=cls.list.__doc__)
-            if issubclass(cls, NonListableRetrieveResource):
-                self.add_path(path, view, method='GET',
-                              tag=name, id_params=cls.id_params,
-                              output_schema=schema,
-                              extra_args=getattr(cls.retrieve, '__extra_args__', None),
-                              auth_required=getattr(cls.retrieve, '__auth_required__', None),
-                              description=cls.retrieve.__doc__)
-            if issubclass(cls, UpdateResource):
-                self.add_path(path, view, method='PUT',
-                              tag=name, id_params=cls.id_params,
-                              input_schema=schema, output_schema=schema,
-                              extra_args=getattr(cls.update, '__extra_args__', None),
-                              auth_required=getattr(cls.update, '__auth_required__', None),
-                              description=cls.update.__doc__)
-                self.app.add_url_rule(path, view_func=view, methods=['PUT'])
-            if issubclass(cls, DeleteResource):
-                self.add_path(path, view, method='DELETE',
-                              tag=name, id_params=cls.id_params,
-                              extra_args=getattr(cls.delete, '__extra_args__', None),
-                              auth_required=getattr(cls.delete, '__auth_required__', None),
-                              status_code=204, description=cls.delete.__doc__)
-
-            # keep track of methods
-            self.resource_methods[name] = next(
-                r.methods for r in self.app.url_map.iter_rules() if r.endpoint == name
-            )
-                            
-            return cls
+            return self.add_resource(cls, path, name, schema)            
 
         return decorator
+
+    def add_resource(self, cls, path, name, schema):
+        cls.name = name
+        cls.id_params = self.RE_URL.findall(path)
+
+        base_path = '/'.join(path.split('/')[:-1])
+        view = RestView.as_view(name, schema, cls(), len(cls.id_params))
+        if issubclass(cls, CreateResource):
+            self.add_path(base_path, view, method='POST',
+                            tag=name, id_params=cls.id_params[:-1],
+                            input_schema=schema, output_schema=schema,
+                            extra_args=getattr(cls.create, '__extra_args__', None),
+                            auth_required=getattr(cls.create, '__auth_required__', None),
+                            status_code=201, description=cls.create.__doc__)
+        if issubclass(cls, RetrieveResource):
+            self.add_path(base_path, view, method='GET',
+                            tag=name, id_params=cls.id_params[:-1],
+                            output_schema=schema(many=True),
+                            extra_args=getattr(cls.list, '__extra_args__', None),
+                            auth_required=getattr(cls.list, '__auth_required__', None),
+                            description=cls.list.__doc__)
+        if issubclass(cls, NonListableRetrieveResource):
+            self.add_path(path, view, method='GET',
+                            tag=name, id_params=cls.id_params,
+                            output_schema=schema,
+                            extra_args=getattr(cls.retrieve, '__extra_args__', None),
+                            auth_required=getattr(cls.retrieve, '__auth_required__', None),
+                            description=cls.retrieve.__doc__)
+        if issubclass(cls, UpdateResource):
+            self.add_path(path, view, method='PUT',
+                            tag=name, id_params=cls.id_params,
+                            input_schema=schema, output_schema=schema,
+                            extra_args=getattr(cls.update, '__extra_args__', None),
+                            auth_required=getattr(cls.update, '__auth_required__', None),
+                            description=cls.update.__doc__)
+            self.app.add_url_rule(path, view_func=view, methods=['PUT'])
+        if issubclass(cls, DeleteResource):
+            self.add_path(path, view, method='DELETE',
+                            tag=name, id_params=cls.id_params,
+                            extra_args=getattr(cls.delete, '__extra_args__', None),
+                            auth_required=getattr(cls.delete, '__auth_required__', None),
+                            status_code=204, description=cls.delete.__doc__)
+
+        # keep track of methods
+        self.resource_methods[name] = next(
+            r.methods for r in self.app.url_map.iter_rules() if r.endpoint == name
+        )
+           
+        return cls
 
     def add_path(self, path, view, method, tag, id_params=None,
                  input_schema=None, output_schema=None, extra_args=None, auth_required=None,
@@ -370,6 +373,11 @@ class RestApi:
             }
         })
 
+    def add_blueprint(self, blueprint):
+        blueprint.bind(self)
+        for cls, args in blueprint.resources:
+            self.add_resource(cls, *args)
+
     def url_for(self, resource_name, _method=None, _external=True, **kwargs):
         if _method is None:
             methods = self.resource_methods[resource_name]
@@ -378,6 +386,32 @@ class RestApi:
                     _method = desired_method
                     break
         return url_for(resource_name, _method=_method, _external=_external, **kwargs)
+
+
+class RestApiBlueprint:
+
+    def __init__(self):
+        self.resources = []
+        self._rest_api = None  # needs to be binded
+
+    def bind(self, rest_api):
+        if self._rest_api is not None:
+            raise RuntimeError("blueprints can be bound to one rest api only")
+        self._rest_api = rest_api
+
+    def resource(self, path, name, schema):
+
+        def decorator(cls):
+            return self.add_resource(cls, path, name, schema)
+        
+        return decorator
+
+    def add_resource(self, cls, path, name, schema):
+        self.resources.append((cls, (path, name, schema)))
+        return cls
+    
+    def url_for(self, resource_name, _method=None, _external=True, **kwargs):
+        return self._rest_api.url_for(resource_name, _method=_method, _external=_external, **kwargs)
 
 
 def extra_args(args):

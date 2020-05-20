@@ -7,7 +7,7 @@ from flask.json import jsonify
 from marshmallow import Schema, fields
 
 from crudest import (CreateResource, CrudResource, DeleteResource, HeadedResponse, NonListableRetrieveResource, RestApi,
-                     RetrieveResource, UpdateResource, WrappedResponse, extra_args, jwt_required)
+                     RestApiBlueprint, RetrieveResource, UpdateResource, WrappedResponse, extra_args, jwt_required)
 
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = 's3cr1t'
@@ -191,7 +191,10 @@ class CatActionResource(CreateResource, UpdateResource):
         )
 
 
-@api.resource('/cats/<int:cat_id>/syncs/<cat_sync_id>', name='CatSync', schema=CatSyncSchema)
+sync_api = RestApiBlueprint()
+
+
+@sync_api.resource('/cats/<int:cat_id>/syncs/<cat_sync_id>', name='CatSync', schema=CatSyncSchema)
 class CatSyncResource(CreateResource, NonListableRetrieveResource):
 
     @jwt_required
@@ -210,4 +213,12 @@ class CatSyncResource(CreateResource, NonListableRetrieveResource):
         cat_sync = db['CatSync'].get(cat_sync_id)
         if cat_sync is None:
             raise InvalidUsage('Cat sync not found.', status_code=404)
-        return cat_sync
+        return WrappedResponse(
+            data=cat_sync,
+            links=dict(
+                self=sync_api.url_for('CatSync', cat_id=cat_id, cat_sync_id=cat_sync_id)
+            )
+        )
+
+
+api.add_blueprint(sync_api)

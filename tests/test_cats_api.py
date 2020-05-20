@@ -198,7 +198,8 @@ def test_retrieve_cat_sync(client, access_token, database):
     assert rv.status_code == 200
     stored = database['CatSync'][cat_sync_id]
     for key in stored.keys():
-        assert result[key] == stored[key]
+        assert result['data'][key] == stored[key]
+    assert result['links']['self'] == f'http://feline.io/cats/1/syncs/{cat_sync_id}'
 
 
 def test_update_cat(client, access_token, database):
