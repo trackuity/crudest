@@ -161,15 +161,18 @@ class WrappedResponse(Response):
     different top-level members.
     """
 
-    def __init__(self, data, status_code=None, links=None, **kwargs):
+    def __init__(self, data, status_code=None, links=None, data_key='data', **kwargs):
         super().__init__(data, status_code, links)
+        self._data_key = data_key
         self._kwargs = kwargs
     
     def generate(self, schema_cls, many, base_links=None):
         return jsonify(
-            data=self.dump_data(schema_cls, many=many),
             links=self.extend_links(base_links),
-            **self._kwargs
+            **{
+                self._data_key: self.dump_data(schema_cls, many=many),
+                **self._kwargs
+            }
         )
 
 
