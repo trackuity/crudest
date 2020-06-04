@@ -67,7 +67,17 @@ class RetrieveResource(NonListableRetrieveResource):
         raise NotImplementedError()
 
 
-class UpdateResource(Resource):
+class ReplaceResource(Resource):
+
+    @abstractmethod
+    def replace(self, *args, **kwargs):
+        raise NotImplementedError()
+
+
+class UpdateResource(ReplaceResource):
+
+    def replace(self, *args, **kwargs):
+        return self.update(*args, **kwargs)
 
     @abstractmethod
     def update(self, *args, **kwargs):
@@ -218,6 +228,20 @@ class RestView(MethodView):
     def put(self, **kwargs):
         parent_ids = self._extract_parent_ids(self.resource, kwargs)
         kwargs.update(parser.parse(
+            self.schema_cls(),
+            request,
+            location='json_or_form'
+        ))
+        response = self.resource.replace(**kwargs)
+        if not isinstance(response, Response):
+            response = Response(data=response)
+        return response.generate(self.schema_cls, many=False, base_links={
+            'collection': url_for(self.resource.name, _external=True, **parent_ids)
+        }), response.get_status_code(default=200)
+
+    def patch(self, **kwargs):
+        parent_ids = self._extract_parent_ids(self.resource, kwargs)
+        kwargs.update(parser.parse(
             self.schema_cls(partial=True),
             request,
             location='json_or_form'
@@ -301,7 +325,7 @@ class RestApi:
         if issubclass(cls, RetrieveResource):
             self.add_path(base_path, view, method='GET',
                             tag=name, id_params=cls.id_params[:-1],
-                            output_schema=schema(many=True),
+                            output_schema=schema,
                             extra_args=getattr(cls.list, '__extra_args__', None),
                             auth_required=getattr(cls.list, '__auth_required__', None),
                             description=cls.list.__doc__)
@@ -312,7 +336,7 @@ class RestApi:
                             extra_args=getattr(cls.retrieve, '__extra_args__', None),
                             auth_required=getattr(cls.retrieve, '__auth_required__', None),
                             description=cls.retrieve.__doc__)
-        if issubclass(cls, UpdateResource):
+        if issubclass(cls, ReplaceResource):
             self.add_path(path, view, method='PUT',
                             tag=name, id_params=cls.id_params,
                             input_schema=schema, output_schema=schema,
@@ -320,6 +344,14 @@ class RestApi:
                             auth_required=getattr(cls.update, '__auth_required__', None),
                             description=cls.update.__doc__)
             self.app.add_url_rule(path, view_func=view, methods=['PUT'])
+        if issubclass(cls, UpdateResource):
+            self.add_path(path, view, method='PATCH',
+                            tag=name, id_params=cls.id_params,
+                            input_schema=schema, output_schema=schema,
+                            extra_args=getattr(cls.update, '__extra_args__', None),
+                            auth_required=getattr(cls.update, '__auth_required__', None),
+                            description=cls.update.__doc__)
+            self.app.add_url_rule(path, view_func=view, methods=['PATCH'])
         if issubclass(cls, DeleteResource):
             self.add_path(path, view, method='DELETE',
                             tag=name, id_params=cls.id_params,

@@ -41,26 +41,25 @@ def handle_invalid_usage(error):
 
 
 class IdSchema(Schema):
-    id = fields.Int()
+    id = fields.Int(dump_only=True)
 
 
 class CatSchema(IdSchema):
-    name = fields.Str()
-    weight = fields.Decimal(as_string=True)
+    name = fields.Str(required=True)
+    weight = fields.Decimal(required=True, as_string=True)
 
 
 class CatWhiskerSchema(IdSchema):
-    cat_id = fields.Int()
-    length = fields.Decimal(as_string=True)
+    length = fields.Decimal(required=True, as_string=True)
 
 
 class CatActionSchema(IdSchema):
-    verb = fields.Str()
+    verb = fields.Str(required=True)
 
 
 class CatSyncSchema(Schema):
-    id = fields.Str()  # str, not int
-    done = fields.Bool()
+    id = fields.Str(dump_only=True)  # str, not int
+    done = fields.Bool(dump_only=True)
 
 
 @api.resource('/cats/<int:cat_id>', name='Cat', schema=CatSchema)

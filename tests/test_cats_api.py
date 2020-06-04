@@ -146,7 +146,7 @@ def test_list_cat_whiskers(client, access_token, database):
 
     first_result = results['data'][0]
     stored = database['CatWhisker'][1]
-    for key in stored.keys():
+    for key in first_result:
         assert str(first_result[key]) == str(stored[key])  # to str because decimals
 
     assert 'links' in results
@@ -183,7 +183,7 @@ def test_retrieve_cat_whisker(client, access_token, database):
 
     assert rv.status_code == 200
     stored = database['CatWhisker'][1]
-    for key in stored.keys():
+    for key in result:
         assert str(result[key]) == str(stored[key])  # to str because decimals
 
 
@@ -205,7 +205,7 @@ def test_retrieve_cat_sync(client, access_token, database):
 def test_update_cat(client, access_token, database):
     name = 'Garfield aka The Fat Cat'
 
-    rv = client.put('http://feline.io/cats/1', headers={
+    rv = client.patch('http://feline.io/cats/1', headers={
         'Authorization': 'Bearer ' + access_token
     }, data={
         'name': name
@@ -216,6 +216,13 @@ def test_update_cat(client, access_token, database):
     stored = database['Cat'][result['id']]
     assert stored['name'] == name
     assert stored['weight'] == Decimal(result['weight'])
+
+    rv = client.put('http://feline.io/cats/1', headers={
+        'Authorization': 'Bearer ' + access_token
+    }, data={
+        'name': name
+    })
+    assert rv.status_code == 422  # put doesn't allow partial updates
 
 
 def test_update_cat_whisker(client, access_token, database):
