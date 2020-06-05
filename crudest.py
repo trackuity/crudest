@@ -205,7 +205,7 @@ class RestView(MethodView):
         if not isinstance(response, Response):
             response = Response(data=response)
         return response.generate(self.schema_cls, many=False, base_links={
-            'collection': url_for(self.resource.name, _external=True, **parent_ids)
+            'collection': url_for('.' + self.resource.name, _external=True, **parent_ids)
         }), response.get_status_code(default=201)
 
     def get(self, **kwargs):
@@ -215,7 +215,7 @@ class RestView(MethodView):
             if not isinstance(response, Response):
                 response = Response(data=response)
             return response.generate(self.schema_cls, many=True, base_links={
-                'self': url_for(self.resource.name, _external=True, **parent_ids)
+                'self': url_for('.' + self.resource.name, _external=True, **parent_ids)
             }), response.get_status_code(default=200)
         else:
             response = self.resource.retrieve(**kwargs)
@@ -223,12 +223,12 @@ class RestView(MethodView):
                 response = Response(data=response)
             return response.generate(self.schema_cls, many=False, base_links={
                 'self': url_for(
-                    self.resource.name,
+                    '.' + self.resource.name,
                     _external=True,
                     **{**parent_ids, **kwargs}
                 ),
                 'collection': url_for(
-                    self.resource.name,
+                    '.' + self.resource.name,
                     _external=True,
                     **parent_ids
                 )
@@ -245,7 +245,7 @@ class RestView(MethodView):
         if not isinstance(response, Response):
             response = Response(data=response)
         return response.generate(self.schema_cls, many=False, base_links={
-            'collection': url_for(self.resource.name, _external=True, **parent_ids)
+            'collection': url_for('.' + self.resource.name, _external=True, **parent_ids)
         }), response.get_status_code(default=200)
 
     def patch(self, **kwargs):
@@ -259,7 +259,7 @@ class RestView(MethodView):
         if not isinstance(response, Response):
             response = Response(data=response)
         return response.generate(self.schema_cls, many=False, base_links={
-            'collection': url_for(self.resource.name, _external=True, **parent_ids)
+            'collection': url_for('.' + self.resource.name, _external=True, **parent_ids)
         }), response.get_status_code(default=200)
 
     def delete(self, **kwargs):
@@ -466,7 +466,7 @@ class RestApi:
                 if desired_method in methods:
                     _method = desired_method
                     break
-        return url_for(resource_name, _method=_method, _external=_external, **kwargs)
+        return url_for('.' + resource_name, _method=_method, _external=_external, **kwargs)
 
 
 class RestApiBlueprint:
