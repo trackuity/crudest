@@ -220,4 +220,6 @@ class CatSyncResource(CreateResource, NonListableRetrieveResource):
         )
 
 
-api.add_blueprint(sync_api)
+extra_api = RestApiBlueprint()
+extra_api.add_blueprint(sync_api)
+api.add_blueprint(extra_api)

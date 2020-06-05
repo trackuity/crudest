@@ -492,6 +492,10 @@ class RestApiBlueprint:
         self.resources.append((cls, (path, name, schema)))
         return cls
     
+    def add_blueprint(self, blueprint):
+        blueprint.bind(self)
+        self.resources.extend(blueprint.resources)
+
     def url_for(self, resource_name, _method=None, _external=True, **kwargs):
         return self._rest_api.url_for(resource_name, _method=_method, _external=_external, **kwargs)
 
