@@ -1,11 +1,11 @@
-import functools
+import collections
 import re
 from abc import ABCMeta, abstractmethod
 
 import flask_jwt_extended
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
-from flask import jsonify, request
+from flask import jsonify, request, Blueprint
 from flask.helpers import make_response, url_for
 from flask.views import MethodView
 from flask_jwt_extended import (JWTManager, create_access_token,
@@ -24,6 +24,7 @@ __all__ = [
     'DeleteResource',
     'CrudResource',
     'RestApi',
+    'RestApiBlueprint',
     'Response',
     'HeadedResponse',
     'WrappedResponse',
@@ -267,7 +268,7 @@ class RestApi:
 
     def __init__(self, app, title, version='v1', spec_path='/spec', docs_path='/docs'):
         self.app = app
-        self.resource_methods = {}
+        self.resource_methods = collections.defaultdict(set)
 
         marshmallow_plugin = MarshmallowPlugin()
         self.spec = spec = APISpec(
@@ -278,7 +279,7 @@ class RestApi:
         )
         self.openapi = marshmallow_plugin.converter  # openapi converter from marshmallow plugin
 
-        self.jwt = JWTManager(app)
+        self.jwt = JWTManager()
         self.token_in_blacklist_checker = self.jwt.token_in_blacklist_loader  # shortcut to blacklisting decorator
         self.token_claims_loader = self.jwt.user_claims_loader  # shortcut to user claims decorator
 
@@ -297,11 +298,21 @@ class RestApi:
             'bearerFormat': 'JWT'
         })
 
+        if not isinstance(app, Blueprint):
+            self.init_app(app, spec_path, docs_path)  # we can initialize here on main app, but not on blueprint
+
+    def init_app(self, app, spec_path='/spec', docs_path='/docs', docs_blueprint_name='swagger_ui'):
+        """
+        This needs to be called with the main app as argument when the api is defined on a flask blueprint.
+        """
         @app.route(spec_path)
         def get_spec():
-            return jsonify(spec.to_dict())
+            return jsonify(self.spec.to_dict())
 
-        swaggerui_blueprint = get_swaggerui_blueprint(docs_path, spec_path)
+        self.jwt.init_app(app)
+        swaggerui_blueprint = get_swaggerui_blueprint(
+            docs_path, spec_path, blueprint_name=docs_blueprint_name
+        )
         app.register_blueprint(swaggerui_blueprint, url_prefix=docs_path)
 
     def resource(self, path, name, schema):
@@ -319,6 +330,7 @@ class RestApi:
         base_path = '/'.join(path.split('/')[:-1])
         view = RestView.as_view(name, schema, cls(), len(cls.id_params))
         if issubclass(cls, CreateResource):
+            self.resource_methods[name].add('POST')
             self.add_path(base_path, view, method='POST',
                             tag=name, id_params=cls.id_params[:-1],
                             input_schema=schema, output_schema=schema,
@@ -326,6 +338,7 @@ class RestApi:
                             auth_required=getattr(cls.create, '__auth_required__', None),
                             status_code=201, description=cls.create.__doc__)
         if issubclass(cls, RetrieveResource):
+            self.resource_methods[name].add('GET')
             self.add_path(base_path, view, method='GET',
                             tag=name, id_params=cls.id_params[:-1],
                             output_schema=schema,
@@ -333,6 +346,7 @@ class RestApi:
                             auth_required=getattr(cls.list, '__auth_required__', None),
                             description=cls.list.__doc__)
         if issubclass(cls, NonListableRetrieveResource):
+            self.resource_methods[name].add('GET')
             self.add_path(path, view, method='GET',
                             tag=name, id_params=cls.id_params,
                             output_schema=schema,
@@ -340,6 +354,7 @@ class RestApi:
                             auth_required=getattr(cls.retrieve, '__auth_required__', None),
                             description=cls.retrieve.__doc__)
         if issubclass(cls, ReplaceResource):
+            self.resource_methods[name].add('PUT')
             self.add_path(path, view, method='PUT',
                             tag=name, id_params=cls.id_params,
                             input_schema=schema, output_schema=schema,
@@ -348,6 +363,7 @@ class RestApi:
                             description=cls.update.__doc__)
             self.app.add_url_rule(path, view_func=view, methods=['PUT'])
         if issubclass(cls, UpdateResource):
+            self.resource_methods[name].add('PATCH')
             self.add_path(path, view, method='PATCH',
                             tag=name, id_params=cls.id_params,
                             input_schema=schema, output_schema=schema,
@@ -356,16 +372,12 @@ class RestApi:
                             description=cls.update.__doc__)
             self.app.add_url_rule(path, view_func=view, methods=['PATCH'])
         if issubclass(cls, DeleteResource):
+            self.resource_methods[name].add('DELETE')
             self.add_path(path, view, method='DELETE',
                             tag=name, id_params=cls.id_params,
                             extra_args=getattr(cls.delete, '__extra_args__', None),
                             auth_required=getattr(cls.delete, '__auth_required__', None),
                             status_code=204, description=cls.delete.__doc__)
-
-        # keep track of methods
-        self.resource_methods[name] = next(
-            r.methods for r in self.app.url_map.iter_rules() if r.endpoint == name
-        )
            
         return cls
 
