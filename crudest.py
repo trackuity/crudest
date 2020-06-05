@@ -275,7 +275,10 @@ class RestApi:
 
     IdParam = collections.namedtuple('IdParam', ['type', 'name'])
 
-    def __init__(self, app, title, version='v1', spec_path='/spec', docs_path='/docs'):
+    def __init__(
+        self, app, title, version='v1', spec_path='/spec', docs_path='/docs',
+        security_schemes=None, default_security_scheme=None
+    ):
         self.app = app
         self.resource_methods = collections.defaultdict(set)
 
@@ -306,6 +309,12 @@ class RestApi:
             'scheme': 'bearer',
             'bearerFormat': 'JWT'
         })
+
+        if security_schemes is not None:
+            for name, scheme in security_schemes.items():
+                spec.components.security_scheme(name, scheme)
+
+        self.default_security_scheme = default_security_scheme
 
         if not isinstance(app, Blueprint):
             self.init_app(app, spec_path, docs_path)  # we can initialize here on main app, but not on blueprint
@@ -416,6 +425,9 @@ class RestApi:
                     }
                 }
             }
+
+        if auth_required is None:
+            auth_required = self.default_security_scheme
 
         self.spec.path(swagger_path, operations={
             method.lower(): {
