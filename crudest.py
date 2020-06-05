@@ -1,6 +1,6 @@
 import collections
 import re
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 
 import flask_jwt_extended
 from apispec import APISpec
@@ -18,6 +18,7 @@ from webargs.flaskparser import parser, use_kwargs
 __all__ = [
     'Resource',
     'CreateResource',
+    'ListResource',
     'NonListableRetrieveResource',
     'RetrieveResource',
     'UpdateResource',
@@ -43,7 +44,7 @@ __all__ = [
 ]
 
 
-class Resource(metaclass=ABCMeta):
+class Resource(ABC):
     pass
 
 
@@ -54,6 +55,13 @@ class CreateResource(Resource):
         raise NotImplementedError()
 
 
+class ListResource(Resource):
+
+    @abstractmethod
+    def list(self, *args, **kwargs):
+        raise NotImplementedError()
+
+
 class NonListableRetrieveResource(Resource):
 
     @abstractmethod
@@ -61,11 +69,8 @@ class NonListableRetrieveResource(Resource):
         raise NotImplementedError()
 
 
-class RetrieveResource(NonListableRetrieveResource):
-
-    @abstractmethod
-    def list(self, *args, **kwargs):
-        raise NotImplementedError()
+class RetrieveResource(NonListableRetrieveResource, ListResource, ABC):
+    pass
 
 
 class ReplaceResource(Resource):
@@ -92,7 +97,7 @@ class DeleteResource(Resource):
         raise NotImplementedError()
 
 
-class CrudResource(CreateResource, RetrieveResource, UpdateResource, DeleteResource):
+class CrudResource(CreateResource, RetrieveResource, UpdateResource, DeleteResource, ABC):
     pass
 
 
@@ -358,7 +363,7 @@ class RestApi:
                             extra_args=getattr(cls.create, '__extra_args__', None),
                             auth_required=getattr(cls.create, '__auth_required__', None),
                             status_code=201, description=cls.create.__doc__)
-        if issubclass(cls, RetrieveResource):
+        if issubclass(cls, ListResource):
             self.resource_methods[name].add('GET')
             self.add_path(base_path, view, method='GET',
                             tag=name, id_params=cls.id_params[:-1],
