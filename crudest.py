@@ -281,7 +281,7 @@ class RestApi:
     IdParam = collections.namedtuple('IdParam', ['type', 'name'])
 
     def __init__(
-        self, app, title, version='v1', spec_path='/spec', docs_path='/docs',
+        self, app, title, version='v1', spec_path='/spec', docs_path='/docs', servers=None,
         security_schemes=None, default_security_scheme=None
     ):
         self.app = app
@@ -322,15 +322,16 @@ class RestApi:
         self.default_security_scheme = default_security_scheme
 
         if not isinstance(app, Blueprint):
-            self.init_app(app, spec_path, docs_path)  # we can initialize here on main app, but not on blueprint
+            self.init_app(app, spec_path, docs_path, servers=servers)  # needs to be called separately when blueprint
 
-    def init_app(self, app, spec_path='/spec', docs_path='/docs', docs_blueprint_name='swagger_ui'):
+    def init_app(self, app, spec_path='/spec', docs_path='/docs', docs_blueprint_name='swagger_ui', servers=None):
         """
         This needs to be called with the main app as argument when the api is defined on a flask blueprint.
         """
         @app.route(spec_path)
         def get_spec():
-            return jsonify(self.spec.to_dict())
+            spec_dict = self.spec.to_dict()
+            return jsonify({'servers': servers, **spec_dict} if servers is not None else spec_dict)
 
         self.jwt.init_app(app)
         swaggerui_blueprint = get_swaggerui_blueprint(
