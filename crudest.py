@@ -181,7 +181,7 @@ class RestView(MethodView):
 
     @staticmethod
     def _extract_parent_ids(resource, kwargs):
-        return {p: kwargs[p] for p in resource.id_params[:-1]}
+        return {p.name: kwargs[p.name] for p in resource.id_params[:-1]}
 
     def __init__(self, schema_cls, resource, num_ids=1):
         super().__init__()
@@ -264,7 +264,16 @@ class RestView(MethodView):
 
 class RestApi:
 
-    RE_URL = re.compile(r'<(?:[^:<>]+:)?([^<>]+)>')
+    URL_CONVERTER_TO_TYPE = {
+        'string': 'string',
+        'int': 'integer',
+        'float': 'number',
+        'path': 'string',
+    }
+
+    RE_URL = re.compile(r'<(?:([^:<>]+):)?([^<>]+)>')
+
+    IdParam = collections.namedtuple('IdParam', ['type', 'name'])
 
     def __init__(self, app, title, version='v1', spec_path='/spec', docs_path='/docs'):
         self.app = app
@@ -325,7 +334,10 @@ class RestApi:
 
     def add_resource(self, cls, path, name, schema):
         cls.name = name
-        cls.id_params = self.RE_URL.findall(path)
+        cls.id_params = [
+            self.IdParam(self.URL_CONVERTER_TO_TYPE.get(type_, 'string'), name)
+            for (type_, name) in self.RE_URL.findall(path)
+        ]
 
         base_path = '/'.join(path.split('/')[:-1])
         view = RestView.as_view(name, schema, cls(), len(cls.id_params))
@@ -333,7 +345,7 @@ class RestApi:
             self.resource_methods[name].add('POST')
             self.add_path(base_path, view, method='POST',
                             tag=name, id_params=cls.id_params[:-1],
-                            input_schema=schema, output_schema=schema,
+                            input_schema=schema(), output_schema=schema(),
                             extra_args=getattr(cls.create, '__extra_args__', None),
                             auth_required=getattr(cls.create, '__auth_required__', None),
                             status_code=201, description=cls.create.__doc__)
@@ -341,7 +353,7 @@ class RestApi:
             self.resource_methods[name].add('GET')
             self.add_path(base_path, view, method='GET',
                             tag=name, id_params=cls.id_params[:-1],
-                            output_schema=schema,
+                            output_schema=schema(many=True),
                             extra_args=getattr(cls.list, '__extra_args__', None),
                             auth_required=getattr(cls.list, '__auth_required__', None),
                             description=cls.list.__doc__)
@@ -349,7 +361,7 @@ class RestApi:
             self.resource_methods[name].add('GET')
             self.add_path(path, view, method='GET',
                             tag=name, id_params=cls.id_params,
-                            output_schema=schema,
+                            output_schema=schema(),
                             extra_args=getattr(cls.retrieve, '__extra_args__', None),
                             auth_required=getattr(cls.retrieve, '__auth_required__', None),
                             description=cls.retrieve.__doc__)
@@ -357,7 +369,7 @@ class RestApi:
             self.resource_methods[name].add('PUT')
             self.add_path(path, view, method='PUT',
                             tag=name, id_params=cls.id_params,
-                            input_schema=schema, output_schema=schema,
+                            input_schema=schema(), output_schema=schema(),
                             extra_args=getattr(cls.update, '__extra_args__', None),
                             auth_required=getattr(cls.update, '__auth_required__', None),
                             description=cls.update.__doc__)
@@ -366,7 +378,7 @@ class RestApi:
             self.resource_methods[name].add('PATCH')
             self.add_path(path, view, method='PATCH',
                             tag=name, id_params=cls.id_params,
-                            input_schema=schema, output_schema=schema,
+                            input_schema=schema(partial=True), output_schema=schema(),
                             extra_args=getattr(cls.update, '__extra_args__', None),
                             auth_required=getattr(cls.update, '__auth_required__', None),
                             description=cls.update.__doc__)
@@ -384,16 +396,20 @@ class RestApi:
     def add_path(self, path, view, method, tag, id_params=None,
                  input_schema=None, output_schema=None, extra_args=None, auth_required=None,
                  status_code=200, description=''):
-        swagger_path = self.RE_URL.sub(r'{\1}', path)
+        swagger_path = self.RE_URL.sub(r'{\2}', path)
         self.app.add_url_rule(path, view_func=view, methods=[method])
 
-        parameters = [{'name': id_param, 'in': 'path'} for id_param in id_params]
+        parameters = [
+            {'name': id_param.name, 'schema': {'type': id_param.type}, 'in': 'path'}
+            for id_param in id_params
+        ]
         if extra_args:
             parameters.extend(self.openapi.fields2parameters(extra_args, default_in='query'))
 
         request_body = {}
         if input_schema:
             request_body['requestBody'] = {
+                'description': '',
                 'content': {
                     'application/json': {
                         'schema': self.openapi.schema2jsonschema(input_schema)
@@ -403,10 +419,11 @@ class RestApi:
 
         self.spec.path(swagger_path, operations={
             method.lower(): {
-                'description': description,
+                'description': description or '',
                 'parameters': parameters,
                 'responses': {
                     str(status_code): {} if not output_schema else {
+                        'description': '',
                         'content': {
                             'application/json': {
                                 'schema': output_schema
