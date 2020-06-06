@@ -118,10 +118,15 @@ def test_list_cats(client, access_token, database):
 
     assert 'access-control-expose-headers' in rv.headers
     assert 'link' in rv.headers['access-control-expose-headers'].lower()
+    assert 'x-total-count' in rv.headers['access-control-expose-headers'].lower()
+    assert 'pragma' not in rv.headers['access-control-expose-headers'].lower()
     
     assert 'link' in rv.headers
     assert rv.links['self']['url'] == 'http://feline.io/cats'
     assert rv.links['next']['url'] == 'http://feline.io/cats?page=2'
+    assert 'x-total-count' in rv.headers
+    assert int(rv.headers['x-total-count']) == len(database['Cat'])
+    assert 'pragma' in rv.headers
 
     rv = client.get(f'http://feline.io/cats?page=2', headers={
         'Authorization': 'Bearer ' + access_token

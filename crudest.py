@@ -141,6 +141,16 @@ class HeadedResponse(Response):
     any other given headers to be added as well.
     """
 
+    CORS_SAFELISTED_HEADERS = {
+        'Cache-Control',
+        'Content-Language',
+        'Content-Length',
+        'Content-Type',
+        'Expires',
+        'Last-Modified',
+        'Pragma'
+    }
+
     def __init__(self, data, status_code=None, links=None, headers=None):
         super().__init__(data, status_code, links)
         self._headers = headers
@@ -151,12 +161,17 @@ class HeadedResponse(Response):
             f'<{u}>; rel="{n}"'
             for (n, u) in self.extend_links(base_links).items()
         )
+        added_headers = set()
         if link_header:
             response.headers['Link'] = link_header
-            response.headers['Access-Control-Expose-Headers'] = 'Link'
+            added_headers.add('Link')
         if self._headers is not None:
             for key, value in self._headers.items():
                 response.headers[key] = value
+                added_headers.add(key)
+        expose_headers = added_headers - self.CORS_SAFELISTED_HEADERS
+        if expose_headers:
+            response.headers['Access-Control-Expose-Headers'] = ', '.join(expose_headers)
         return response
 
 

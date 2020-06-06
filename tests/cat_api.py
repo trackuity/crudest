@@ -82,7 +82,11 @@ class CatResource(CreateResource, RetrieveResource, UpdateResource, DeleteResour
         # grabbing this opportunity to test headed responses!
         return HeadedResponse(
             data=values[(page-1)*2:page*2],
-            links=links
+            links=links,
+            headers={
+                'X-Total-Count': len(values),
+                'Pragma': 'no-cache'
+            }
         )
 
     @jwt_required
