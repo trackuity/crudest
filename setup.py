@@ -7,6 +7,6 @@ setup(
     license = 'Apache Software License (ASF)',
     url = 'https://github.com/trackuity/crudest',
     py_modules = ['crudest'],
-    install_requires = ['Flask', 'apispec>3.0', 'webargs==6', 'marshmallow>3.0',
-                        'flask-swagger-ui>3.0', 'Flask-JWT-Extended']
+    install_requires = ['Flask', 'apispec>3.0,<4.0', 'webargs==6', 'marshmallow>3.0',
+                        'flask-swagger-ui>3.0', 'Flask-JWT-Extended<4.0']
 )
